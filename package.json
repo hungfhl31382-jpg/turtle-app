@@ -1,0 +1,14 @@
+{
+  "name": "turtle-app",
+  "version": "1.0.0",
+  "description": "Turtle - Ứng dụng học ngôn ngữ (build Tailwind CSS chuẩn cho production)",
+  "private": true,
+  "scripts": {
+    "build": "tailwindcss -i ./src/input.css -o ./dist/output.css --minify",
+    "watch": "tailwindcss -i ./src/input.css -o ./dist/output.css --watch",
+    "serve": "npx serve ."
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.13"
+  }
+}
