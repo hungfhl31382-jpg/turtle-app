@@ -26,8 +26,215 @@
             }
         ];
 
+        // ================= SUPABASE: ĐĂNG NHẬP + ĐỒNG BỘ DỮ LIỆU ĐA THIẾT BỊ =================
+        // Cần tạo 1 project miễn phí tại https://supabase.com rồi điền URL + anon key vào đây.
+        // Xem hướng dẫn đầy đủ trong README.md (mục "Thiết lập đăng nhập & đồng bộ dữ liệu").
+        const SUPABASE_URL = 'https://hpkgmnqwhmfbaxvuoypt.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhwa2dtbnF3aG1mYmF4dnVveXB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyNjYzMTIsImV4cCI6MjA5ODg0MjMxMn0.LOatMR2CYokYXBm25iRSR4mOyFIgctVmPlRv0aQfuO8';
+        const supabaseClient = (typeof window.supabase !== 'undefined' && !SUPABASE_URL.includes('YOUR-PROJECT'))
+            ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+            : null;
+
+        let currentUser = null;
+        let cloudSyncTimer = null;
+        let authMode = 'signin'; // 'signin' | 'signup'
+
+        function isCloudConfigured() { return !!supabaseClient; }
+
+        // ---------- MÀN HÌNH ĐĂNG NHẬP / ĐĂNG KÝ ----------
+        function renderAuthScreen(errorMsg) {
+            const el = document.getElementById('auth-screen');
+            if (!el) return;
+            const isSignup = authMode === 'signup';
+            el.innerHTML = `
+            <div class="w-full max-w-sm space-y-4">
+                <div class="text-center space-y-2">
+                    <div class="w-12 h-12 bg-brand-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-brand-500/20 mx-auto">
+                        <i data-lucide="turtle" class="w-6 h-6"></i>
+                    </div>
+                    <h1 class="text-xl font-bold">Turtle</h1>
+                    <p class="text-sm text-slate-400">${isSignup ? 'Tạo tài khoản để đồng bộ dữ liệu học tập' : 'Đăng nhập để tiếp tục học'}</p>
+                </div>
+
+                ${!isCloudConfigured() ? `
+                <div class="bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs rounded-xl p-3 leading-relaxed">
+                    Chưa cấu hình Supabase nên chưa thể đăng nhập/đồng bộ. Xem hướng dẫn trong README.md để bật tính năng này. Trong lúc chờ, bạn vẫn có thể dùng thử app ở chế độ offline.
+                    <button onclick="initApp(true)" class="block mt-2 font-semibold underline">Dùng thử offline →</button>
+                </div>` : ''}
+
+                ${errorMsg ? `<div class="bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs rounded-xl p-3">${escapeHtml(errorMsg)}</div>` : ''}
+
+                <div class="bg-white dark:bg-zinc-900 rounded-3xl border border-slate-100 dark:border-zinc-800/50 shadow-sm p-6 space-y-4">
+                    <button onclick="signInGoogle()" ${!isCloudConfigured() ? 'disabled' : ''} class="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed">
+                        <svg class="w-4 h-4" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 32.6 29.4 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.5 29.6 4.5 24 4.5 12.7 4.5 3.5 13.7 3.5 25S12.7 45.5 24 45.5 44.5 36.3 44.5 25c0-1.5-.2-3-.4-4.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.5 29.6 4.5 24 4.5c-7.6 0-14.2 4.3-17.7 10.2z"/><path fill="#4CAF50" d="M24 45.5c5.5 0 10.4-1.9 14.2-5.1l-6.6-5.4C29.6 36.6 26.9 37.5 24 37.5c-5.4 0-9.9-3.4-11.5-8.2l-6.6 5.1C9.6 40.9 16.2 45.5 24 45.5z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.7 2-1.9 3.8-3.5 5.1l6.6 5.4C42 34.9 44.5 30.3 44.5 25c0-1.5-.2-3-.4-4.5z"/></svg>
+                        Đăng nhập bằng Google
+                    </button>
+
+                    <div class="flex items-center gap-3 text-xs text-slate-400"><div class="flex-1 h-px bg-slate-100 dark:bg-zinc-800"></div>hoặc<div class="flex-1 h-px bg-slate-100 dark:bg-zinc-800"></div></div>
+
+                    <div class="space-y-2">
+                        <input id="auth-email" type="email" placeholder="Email" class="w-full text-sm bg-slate-50 dark:bg-zinc-800 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-500/30">
+                        <input id="auth-password" type="password" placeholder="Mật khẩu (ít nhất 6 ký tự)" onkeydown="if(event.key==='Enter') submitAuthForm();" class="w-full text-sm bg-slate-50 dark:bg-zinc-800 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-500/30">
+                    </div>
+
+                    <button onclick="submitAuthForm()" id="auth-submit-btn" ${!isCloudConfigured() ? 'disabled' : ''} class="w-full py-2.5 rounded-xl font-semibold text-sm bg-brand-500 hover:bg-brand-600 text-white transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">${isSignup ? 'Đăng ký' : 'Đăng nhập'}</button>
+
+                    <p class="text-center text-xs text-slate-400">
+                        ${isSignup ? 'Đã có tài khoản?' : 'Chưa có tài khoản?'}
+                        <button onclick="authMode = '${isSignup ? 'signin' : 'signup'}'; renderAuthScreen();" class="text-brand-500 font-semibold hover:underline">${isSignup ? 'Đăng nhập' : 'Đăng ký ngay'}</button>
+                    </p>
+                </div>
+            </div>`;
+            safeLucide();
+        }
+
+        async function submitAuthForm() {
+            if (!isCloudConfigured()) { renderAuthScreen('Chưa cấu hình Supabase.'); return; }
+            const email = document.getElementById('auth-email').value.trim();
+            const password = document.getElementById('auth-password').value;
+            if (!email || !password) { renderAuthScreen('Nhập đầy đủ email và mật khẩu nhé.'); return; }
+            const btn = document.getElementById('auth-submit-btn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Đang xử lý...'; }
+            try {
+                if (authMode === 'signup') {
+                    const { data, error } = await supabaseClient.auth.signUp({ email, password });
+                    if (error) throw error;
+                    if (data.user && !data.session) {
+                        renderAuthScreen('Đã gửi email xác nhận. Kiểm tra hộp thư để hoàn tất đăng ký nhé!');
+                        return;
+                    }
+                } else {
+                    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+                    if (error) throw error;
+                }
+                // onAuthStateChange (đăng ký ở initAuth) sẽ tự lo phần vào app + tải dữ liệu
+            } catch (err) {
+                renderAuthScreen(translateAuthError(err.message));
+            }
+        }
+
+        async function signInGoogle() {
+            if (!isCloudConfigured()) { renderAuthScreen('Chưa cấu hình Supabase.'); return; }
+            await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname } });
+        }
+
+        async function signOutUser() {
+            if (isCloudConfigured()) { try { await supabaseClient.auth.signOut(); } catch (e) {} }
+            currentUser = null;
+            document.getElementById('app-root').classList.add('hidden');
+            document.getElementById('auth-screen').classList.remove('hidden');
+            authMode = 'signin';
+            renderAuthScreen();
+        }
+
+        function translateAuthError(msg) {
+            if (!msg) return 'Có lỗi xảy ra, thử lại nhé.';
+            if (msg.includes('Invalid login credentials')) return 'Sai email hoặc mật khẩu.';
+            if (msg.includes('User already registered')) return 'Email này đã được đăng ký, thử đăng nhập nhé.';
+            if (msg.includes('Password should be at least')) return 'Mật khẩu cần ít nhất 6 ký tự.';
+            return msg;
+        }
+
+        // ---------- ĐỒNG BỘ DỮ LIỆU LÊN/XUỐNG SUPABASE ----------
+        // Gộp toàn bộ dữ liệu học tập (bộ thẻ + streak + lịch học) thành 1 JSON theo từng user.
+        function collectAllAppData() {
+            return { studySets, dailyActivity, calendarEvents };
+        }
+
+        function applyAllAppData(data) {
+            if (!data) return;
+            if (data.studySets) { studySets = data.studySets; localStorage.setItem('ruanho_sets', JSON.stringify(studySets)); }
+            if (data.dailyActivity) { dailyActivity = data.dailyActivity; localStorage.setItem('ruanho_activity', JSON.stringify(dailyActivity)); }
+            if (data.calendarEvents) { calendarEvents = data.calendarEvents; localStorage.setItem('ruanho_calendar_events', JSON.stringify(calendarEvents)); }
+        }
+
+        // Gộp nhiều thay đổi liên tiếp lại, chỉ đẩy lên cloud 1 lần sau 1.2s để tránh gọi API liên tục
+        function queueCloudSync() {
+            if (!isCloudConfigured() || !currentUser) return;
+            clearTimeout(cloudSyncTimer);
+            cloudSyncTimer = setTimeout(pushCloudData, 1200);
+        }
+
+        async function pushCloudData() {
+            if (!isCloudConfigured() || !currentUser) return;
+            try {
+                await supabaseClient.from('app_data').upsert({
+                    user_id: currentUser.id,
+                    data: collectAllAppData(),
+                    updated_at: new Date().toISOString()
+                });
+            } catch (e) { console.error('Lỗi đồng bộ lên cloud:', e); }
+        }
+
+        async function pullCloudData() {
+            if (!isCloudConfigured() || !currentUser) return;
+            try {
+                const { data, error } = await supabaseClient.from('app_data').select('data').eq('user_id', currentUser.id).maybeSingle();
+                if (error) throw error;
+                if (data && data.data) {
+                    applyAllAppData(data.data);
+                } else {
+                    // Lần đăng nhập đầu tiên, chưa có dữ liệu trên cloud -> đẩy dữ liệu local hiện có lên
+                    await pushCloudData();
+                }
+            } catch (e) { console.error('Lỗi tải dữ liệu từ cloud:', e); }
+        }
+
+        // ---------- XỬ LÝ TRẠNG THÁI ĐĂNG NHẬP / VÀO APP ----------
+        function applyThemeAndBoot() {
+            const savedTheme = localStorage.getItem('ruanho_theme');
+            if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+            updateStreakDisplay();
+            switchPage('dashboard');
+            safeLucide();
+        }
+
+        async function enterApp(user) {
+            currentUser = user;
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('app-root').classList.remove('hidden');
+            const emailEl = document.getElementById('account-email');
+            if (emailEl) emailEl.textContent = user.email || 'Đã đăng nhập';
+            await pullCloudData();
+            applyThemeAndBoot();
+        }
+
+        // Cho vào app ở chế độ offline (chưa cấu hình Supabase, hoặc người dùng bấm "Dùng thử offline")
+        function initApp(offline) {
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('app-root').classList.remove('hidden');
+            const emailEl = document.getElementById('account-email');
+            if (emailEl) emailEl.textContent = offline ? 'Chế độ offline (chưa đăng nhập)' : '...';
+            applyThemeAndBoot();
+        }
+
+        function initAuth() {
+            if (!isCloudConfigured()) {
+                initApp(true);
+                return;
+            }
+
+            supabaseClient.auth.onAuthStateChange((event, session) => {
+                if (session && session.user) {
+                    if (!currentUser || currentUser.id !== session.user.id) enterApp(session.user);
+                } else {
+                    currentUser = null;
+                    document.getElementById('app-root').classList.add('hidden');
+                    document.getElementById('auth-screen').classList.remove('hidden');
+                    renderAuthScreen();
+                }
+            });
+
+            // Hiện màn đăng nhập trong lúc chờ Supabase kiểm tra phiên đăng nhập cũ (nếu có)
+            renderAuthScreen();
+        }
+
         let studySets = JSON.parse(localStorage.getItem('ruanho_sets')) || defaultStudySets;
-        function saveToStorage() { localStorage.setItem('ruanho_sets', JSON.stringify(studySets)); }
+        function saveToStorage() { localStorage.setItem('ruanho_sets', JSON.stringify(studySets)); queueCloudSync(); }
 
         // ================= HOẠT ĐỘNG HÀNG NGÀY THẬT (STREAK & BIỂU ĐỒ TUẦN) =================
         // Trước đây "streak-counter" và biểu đồ tuần bị hard-code cứng, không phản ánh
@@ -45,6 +252,7 @@
             const key = dateKey(0);
             dailyActivity[key] = (dailyActivity[key] || 0) + count;
             localStorage.setItem('ruanho_activity', JSON.stringify(dailyActivity));
+            queueCloudSync();
             updateStreakDisplay();
         }
 
@@ -78,7 +286,7 @@
         // ================= LỊCH HỌC KIỂU GOOGLE CALENDAR (SỰ KIỆN CÓ GIỜ) =================
         // Mỗi sự kiện: { id, title, date: 'YYYY-MM-DD', start: 'HH:MM', end: 'HH:MM', note, color }
         let calendarEvents = JSON.parse(localStorage.getItem('ruanho_calendar_events') || '[]');
-        function saveCalendarEvents() { localStorage.setItem('ruanho_calendar_events', JSON.stringify(calendarEvents)); }
+        function saveCalendarEvents() { localStorage.setItem('ruanho_calendar_events', JSON.stringify(calendarEvents)); queueCloudSync(); }
 
         // Luôn chuẩn hóa về ngày-tháng-năm local (không dùng toISOString để tránh
         // lệch ngày do múi giờ khi người dùng bấm đúng vào 1 ô ngày/giờ trên lịch).
@@ -1864,9 +2072,12 @@
             if (confirm("Xác nhận xóa hết dữ liệu cá nhân của bạn trên ứng dụng?")) {
                 localStorage.removeItem('ruanho_sets');
                 localStorage.removeItem('ruanho_activity');
+                localStorage.removeItem('ruanho_calendar_events');
                 dailyActivity = {};
                 studySets = defaultStudySets;
+                calendarEvents = [];
                 saveToStorage();
+                saveCalendarEvents();
                 updateStreakDisplay();
                 showToast("Đã reset dữ liệu.", "refresh-cw");
                 switchPage('dashboard');
@@ -1881,12 +2092,5 @@
 
         // TỰ ĐỘNG CHẠY BAN ĐẦU KHI TẢI TRANG
         document.addEventListener("DOMContentLoaded", () => {
-            const savedTheme = localStorage.getItem('ruanho_theme');
-            if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                document.documentElement.classList.add('dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-            }
-            updateStreakDisplay();
-            switchPage('dashboard');
+            initAuth();
         });
