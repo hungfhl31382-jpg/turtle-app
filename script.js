@@ -29,8 +29,8 @@
         // ================= SUPABASE: ĐĂNG NHẬP + ĐỒNG BỘ DỮ LIỆU ĐA THIẾT BỊ =================
         // Cần tạo 1 project miễn phí tại https://supabase.com rồi điền URL + anon key vào đây.
         // Xem hướng dẫn đầy đủ trong README.md (mục "Thiết lập đăng nhập & đồng bộ dữ liệu").
-        const SUPABASE_URL = 'https://hpkgmnqwhmfbaxvuoypt.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhwa2dtbnF3aG1mYmF4dnVveXB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyNjYzMTIsImV4cCI6MjA5ODg0MjMxMn0.LOatMR2CYokYXBm25iRSR4mOyFIgctVmPlRv0aQfuO8';
+        const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
+        const SUPABASE_ANON_KEY = 'YOUR-ANON-PUBLIC-KEY';
         const supabaseClient = (typeof window.supabase !== 'undefined' && !SUPABASE_URL.includes('YOUR-PROJECT'))
             ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
             : null;
@@ -610,6 +610,63 @@
             }
         }
 
+        // ================= PHÁT ÂM THUẬT NGỮ (TEXT-TO-SPEECH) =================
+        function speakText(text) {
+            if (!text) return;
+            if (!('speechSynthesis' in window)) {
+                showToast('Trình duyệt của bạn không hỗ trợ đọc phát âm.', 'volume-x');
+                return;
+            }
+            try {
+                window.speechSynthesis.cancel(); // Hủy câu đang đọc dở trước đó, tránh đọc chồng lên nhau
+                const utter = new SpeechSynthesisUtterance(text);
+                utter.lang = 'en-US';
+                utter.rate = 0.9;
+                window.speechSynthesis.speak(utter);
+            } catch (e) {
+                console.warn('Lỗi phát âm:', e);
+            }
+        }
+
+        // Đọc phát âm 1 thẻ cụ thể trong 1 bộ thẻ (dùng ở trang danh sách thẻ - study-hub)
+        function speakCardTerm(setId, cardId, event) {
+            if (event) event.stopPropagation();
+            const set = studySets.find(s => s.id === setId);
+            const card = set && set.cards.find(c => c.id === cardId);
+            if (card) speakText(card.term);
+        }
+
+        // Đọc phát âm thẻ đang hiển thị trong phiên học hiện tại (flashcards, tự luận, ôn tập...)
+        function speakSessionTerm(event) {
+            if (event) event.stopPropagation();
+            const card = studySession.cards[studySession.currentIndex];
+            if (card) speakText(card.term);
+        }
+
+        // ================= GỢI Ý ĐÁP ÁN (dùng cho chế độ Tự luận & Ôn tập kiểu gõ) =================
+        // Ví dụ: "extended family" -> "extended ______" (giữ nguyên từ đầu, ẩn các từ còn lại)
+        // Với thuật ngữ 1 từ: "meticulous" -> "m__________" (giữ chữ cái đầu)
+        function generateHint(term) {
+            const words = term.trim().split(/\s+/);
+            if (words.length === 1) {
+                const w = words[0];
+                return w.length <= 1 ? w : w[0] + '_'.repeat(w.length - 1);
+            }
+            return words.map((w, i) => i === 0 ? w : '_'.repeat(w.length)).join(' ');
+        }
+
+        function showLearnHint() {
+            const card = studySession.cards[studySession.currentIndex];
+            const el = document.getElementById('learn-hint-text');
+            if (el && card) el.textContent = generateHint(card.term);
+        }
+
+        function showReviewHint() {
+            const card = studySession.cards[studySession.currentIndex];
+            const el = document.getElementById('review-hint-text');
+            if (el && card) el.textContent = generateHint(card.term);
+        }
+
         // Quản lý Trạng thái State Toàn cục
         let currentActivePage = 'dashboard';
         let currentBrowsingSetId = null;
@@ -936,6 +993,7 @@
                             <div class="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-slate-100 dark:border-zinc-800/60 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
                                 <div class="flex gap-4 items-start">
                                     <span class="text-xs font-bold text-slate-300 mt-0.5">${idx + 1}</span>
+                                    <button onclick="speakCardTerm('${set.id}', '${c.id}', event)" class="w-7 h-7 shrink-0 rounded-full bg-slate-50 dark:bg-zinc-800 text-slate-400 hover:text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-500/10 flex items-center justify-center transition-all mt-0.5" title="Nghe phát âm"><i data-lucide="volume-2" class="w-3.5 h-3.5"></i></button>
                                     <div>
                                         <div class="font-bold text-slate-900 dark:text-zinc-100">${escapeHtml(c.term)}</div>
                                         <div class="text-sm text-slate-500 dark:text-zinc-400 mt-0.5">${escapeHtml(c.definition)}</div>
@@ -964,6 +1022,7 @@
                         <div id="flashcard-inner" class="w-full h-full transform-style-3d transition-transform duration-500 relative bg-white dark:bg-zinc-900 border dark:border-zinc-800 rounded-3xl shadow-sm">
                             <div class="absolute inset-0 backface-hidden flex flex-col justify-center items-center p-8">
                                 <span class="text-[10px] font-bold tracking-widest uppercase text-slate-300 absolute top-6">Mặt trước (Thuật ngữ)</span>
+                                <button onclick="speakSessionTerm(event)" class="absolute top-5 right-5 w-9 h-9 rounded-full bg-slate-50 dark:bg-zinc-800 text-slate-400 hover:text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-500/10 flex items-center justify-center transition-all" title="Nghe phát âm"><i data-lucide="volume-2" class="w-4 h-4"></i></button>
                                 <h3 class="text-3xl font-extrabold text-center text-slate-900 dark:text-zinc-50">${escapeHtml(card.term)}</h3>
                                 <span class="text-xs text-slate-400 mt-4 flex items-center gap-1 opacity-60"><i data-lucide="refresh-cw" class="w-3 h-3"></i> Bấm để lật xem định nghĩa</span>
                             </div>
@@ -1004,6 +1063,10 @@
                             <label class="text-xs uppercase font-bold text-slate-400">Nhập thuật ngữ tương ứng:</label>
                             <input type="text" id="learn-input" autofocus autocomplete="off" placeholder="Gõ câu trả lời bằng tiếng Anh / thuật ngữ gốc..." class="w-full p-3 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 outline-none rounded-xl text-base font-semibold text-slate-900 dark:text-zinc-100 focus:border-brand-500 transition-all">
                             <div id="learn-feedback" class="text-sm font-medium min-h-[20px]"></div>
+                            <div class="flex items-center gap-2 pt-1">
+                                <button type="button" onclick="showLearnHint()" class="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"><i data-lucide="lightbulb" class="w-3.5 h-3.5"></i> Xem gợi ý</button>
+                                <span id="learn-hint-text" class="text-sm font-mono tracking-widest text-slate-400"></span>
+                            </div>
                         </div>
 
                         <div class="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-zinc-800">
@@ -1129,6 +1192,11 @@
                             placeholder="Gõ câu trả lời..."
                             class="w-full p-3 bg-slate-50 dark:bg-zinc-800 border ${answered ? (studySession.reviewLastCorrect ? 'border-brand-500' : 'border-rose-500') : 'border-slate-200 dark:border-zinc-700'} outline-none rounded-xl text-base font-semibold focus:border-brand-500 transition-all text-slate-900 dark:text-zinc-100">
                         ${answered ? `<div class="text-sm font-medium ${studySession.reviewLastCorrect ? 'text-brand-600 dark:text-brand-400' : 'text-rose-600 dark:text-rose-400'}">${studySession.reviewLastCorrect ? 'Chính xác!' : 'Đáp án đúng: ' + escapeHtml(card.term)}</div>` : ''}
+                        ${!answered ? `
+                        <div class="flex items-center gap-2 pt-1">
+                            <button type="button" onclick="showReviewHint()" class="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"><i data-lucide="lightbulb" class="w-3.5 h-3.5"></i> Xem gợi ý</button>
+                            <span id="review-hint-text" class="text-sm font-mono tracking-widest text-slate-400"></span>
+                        </div>` : ''}
                     </div>`;
                 } else {
                     const options = studySession.reviewOptions[idx];
