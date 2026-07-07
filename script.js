@@ -667,6 +667,26 @@
             if (el && card) el.textContent = generateHint(card.term);
         }
 
+        // Siêu gợi ý: "mạnh tay" hơn gợi ý thường - lộ hẳn cả từ đầu tiên (không che nữa).
+        // Với thuật ngữ chỉ có 1 từ (vốn đã ngắn), lộ luôn trọn vẹn cả từ đó.
+        // Ví dụ: "apple watch" -> "apple" | "lie" -> "lie"
+        function generateSuperHint(term) {
+            const words = term.trim().split(/\s+/);
+            return words[0];
+        }
+
+        function showLearnSuperHint() {
+            const card = studySession.cards[studySession.currentIndex];
+            const el = document.getElementById('learn-hint-text');
+            if (el && card) el.textContent = generateSuperHint(card.term);
+        }
+
+        function showReviewSuperHint() {
+            const card = studySession.cards[studySession.currentIndex];
+            const el = document.getElementById('review-hint-text');
+            if (el && card) el.textContent = generateSuperHint(card.term);
+        }
+
         // Quản lý Trạng thái State Toàn cục
         let currentActivePage = 'dashboard';
         let currentBrowsingSetId = null;
@@ -1063,8 +1083,9 @@
                             <label class="text-xs uppercase font-bold text-slate-400">Nhập thuật ngữ tương ứng:</label>
                             <input type="text" id="learn-input" autofocus autocomplete="off" placeholder="Gõ câu trả lời bằng tiếng Anh / thuật ngữ gốc..." class="w-full p-3 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 outline-none rounded-xl text-base font-semibold text-slate-900 dark:text-zinc-100 focus:border-brand-500 transition-all">
                             <div id="learn-feedback" class="text-sm font-medium min-h-[20px]"></div>
-                            <div class="flex items-center gap-2 pt-1">
+                            <div class="flex items-center gap-3 pt-1 flex-wrap">
                                 <button type="button" onclick="showLearnHint()" class="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"><i data-lucide="lightbulb" class="w-3.5 h-3.5"></i> Xem gợi ý</button>
+                                <button type="button" onclick="showLearnSuperHint()" class="text-xs font-semibold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1"><i data-lucide="flame" class="w-3.5 h-3.5"></i> Siêu gợi ý</button>
                                 <span id="learn-hint-text" class="text-sm font-mono tracking-widest text-slate-400"></span>
                             </div>
                         </div>
@@ -1193,8 +1214,9 @@
                             class="w-full p-3 bg-slate-50 dark:bg-zinc-800 border ${answered ? (studySession.reviewLastCorrect ? 'border-brand-500' : 'border-rose-500') : 'border-slate-200 dark:border-zinc-700'} outline-none rounded-xl text-base font-semibold focus:border-brand-500 transition-all text-slate-900 dark:text-zinc-100">
                         ${answered ? `<div class="text-sm font-medium ${studySession.reviewLastCorrect ? 'text-brand-600 dark:text-brand-400' : 'text-rose-600 dark:text-rose-400'}">${studySession.reviewLastCorrect ? 'Chính xác!' : 'Đáp án đúng: ' + escapeHtml(card.term)}</div>` : ''}
                         ${!answered ? `
-                        <div class="flex items-center gap-2 pt-1">
+                        <div class="flex items-center gap-3 pt-1 flex-wrap">
                             <button type="button" onclick="showReviewHint()" class="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"><i data-lucide="lightbulb" class="w-3.5 h-3.5"></i> Xem gợi ý</button>
+                            <button type="button" onclick="showReviewSuperHint()" class="text-xs font-semibold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1"><i data-lucide="flame" class="w-3.5 h-3.5"></i> Siêu gợi ý</button>
                             <span id="review-hint-text" class="text-sm font-mono tracking-widest text-slate-400"></span>
                         </div>` : ''}
                     </div>`;
